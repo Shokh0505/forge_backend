@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import homeIndex, signup, whoAmI, login, createChallenge, getChallenges
+from .views import homeIndex, signup, whoAmI, login, createChallenge, getChallenges, LikeChallenge, joinChallenge, leaveChallenge, finishedChallengeToday, groupChallengeStats
 from rest_framework.authtoken import views as auth_views
 from django.conf import settings
 from django.conf.urls.static import static
@@ -11,6 +11,12 @@ urlpatterns = [
     path('login/', login, name="login"),
     path('api-token-auth/', auth_views.obtain_auth_token, name='obtainToken'),
     path('whoAmI/', whoAmI, name='who_am_I'),
+    # Managing the challenges
     path('createChallenge/', createChallenge, name="create_challenge"),
     path('getChallenges/', getChallenges, name='get_challenges'),
+    path('likeChallenge/', LikeChallenge.as_view(), name='like_challenge'),
+    path('joinChallenge/', joinChallenge, name='join_challenge'),
+    path('leaveChallenge/', leaveChallenge, name='leaveChallenge'),
+    path('finishChallengeToday/', finishedChallengeToday),
+    path('groupChallangeStats/', groupChallengeStats)
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

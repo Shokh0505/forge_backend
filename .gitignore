@@ -88,6 +88,9 @@ env/
 __pycache__/
 *.pyc
 *.sqlite3
+media/*
+backend/media/*
+backend/challenges/*
 
 .env
 db.sqlite3
