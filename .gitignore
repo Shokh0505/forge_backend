@@ -92,5 +92,6 @@ media/*
 backend/media/*
 backend/challenges/*
 
+
 .env
 db.sqlite3
