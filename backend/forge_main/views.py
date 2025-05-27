@@ -442,6 +442,15 @@ def get_whiteListed_people(request):
     serialized_data = []
 
     for person in whitelist_people:
-        print(person)
+        serialized_whitelist = UserSerializerID(person.allowed_person)
+        serialized_data.append(serialized_whitelist.data)
 
-    return Response({"message": "success"}, status=200)
+    return Response({"message": "success", "data": serialized_data}, status=200)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def is_messaging_allowed(request):
+    user = request.user
+    isAllowed = user.user_settings.allow_messaging
+    return Response({"message": "success", "isAllowed": isAllowed}, status=200)

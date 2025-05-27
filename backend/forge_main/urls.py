@@ -32,5 +32,6 @@ urlpatterns = [
     path('toggle_allow_messaging/', toggle_allow_messaging, name='toggle_allow_messaging'),
     path('add_white_list/', add_white_list, name='add_white_list'),
     path('get_whiteListed_people/', get_whiteListed_people, name='get_whiteListed_people'),
+    path('is_messaging_allowed/', is_messaging_allowed, name='is_messaging_allowed'),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
