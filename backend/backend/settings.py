@@ -34,6 +34,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -45,6 +46,18 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework.authtoken',
 ]
+
+ASGI_APPLICATION = "backend.asgi.application"
+
+# in production, Redis is go to choice for handling asgi with different workers
+# for dev, memory is ok as we have only a worker in development server
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer'
+    }
+}
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -100,8 +113,6 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
 ]
-
-from datetime import timedelta
 
 
 

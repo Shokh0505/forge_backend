@@ -2,10 +2,33 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError 
 from datetime import date, timedelta
-from django.db.models import Count
+from django.db.models import Count, Q
 
 class User(AbstractUser):
     profile_photo = models.TextField(max_length=15, default="default1.png")
+    bio = models.TextField(max_length=500, default='')
+
+    def __str__(self):
+        return f"{self.username}"
+    
+    def get_all_chats(self):
+        chats = Chat.objects.filter(Q(user1=self) | Q(user2=self))
+        chatted_people = []
+        
+        for chat in chats:
+            data = {}
+            if chat.user1 == self:
+                data['user'] = chat.user2
+                data['last_message'] = chat.last_message()
+                
+                chatted_people.append(data)
+            else:
+                data['user'] = chat.user1
+                data['last_message'] = chat.last_message()
+                
+                chatted_people.append(data)
+
+        return chatted_people
     
 class Challenge(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -59,12 +82,36 @@ class Challenge(models.Model):
             )
 
         streak = 0
-        time = date.today()
+        time = date.today() - timedelta(days=1)
 
         while time in records:
             streak += 1
             time -= timedelta(days=1)
         
+        if date.today() in records:
+            streak += 1
+        
+        return streak
+    
+    def streakUser(self, user):
+        """
+            Returns the streak of individual user
+        """
+        records = set(
+            ChallengeRecord.objects
+            .filter(challenge=self, user=user)
+            .values_list('date', flat=True)
+        )
+
+        streak = 0
+        start_time = date.today() - timedelta(days=1)
+        while start_time in records:
+            streak += 1
+            start_time -= timedelta(days=1)
+
+        if date.today() in records:
+            streak += 1
+
         return streak
 
     def topPeople(self):
@@ -104,6 +151,18 @@ class ChallengeRecord(models.Model):
     class Meta:
         unique_together = ('challenge', 'user', 'date')
     
+class ChallengeParticipationSnapshot(models.Model):
+    challenge = models.ForeignKey(Challenge, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    date = models.DateField(auto_now_add=True)  
+
+    class Meta:
+        unique_together = ('challenge', 'user', 'date')
+# Todo! in this approach I'm using just calculating with how many participants challenge have right now. However the number of people may change
+# In real world, instead of checking when creating challenging, I would use cron to automatically 
+# save the number of participants for a day for challenge. This is useful for calculcating percentage
+# of challenge group who have done the challenge
+
 
 class Chat(models.Model):
     user1 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chats_initiated')
@@ -112,19 +171,20 @@ class Chat(models.Model):
 
     class Meta:
         unique_together = ('user1', 'user2')
+
+    def __str__(self):
+        return f"Chat between {self.user1} and {self.user2}"
     
+    def last_message(self):
+        return self.messages.order_by('-sent_at').first()
+
     def save(self, *args, **kwargs):
-        # Avoid duplicate chats
         if self.user1.id > self.user2.id:
             self.user1, self.user2 = self.user2, self.user1
-
-        if Chat.object.filter(user1=self.user1, user2=self.user2).exists():
-            raise ValueError("Chat between users already exists!")
-
-        super.save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
 class Settings(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_settings')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='user_settings')
     allow_messaging = models.BooleanField(default=True)
     has_whitelist = models.BooleanField(default=False)
 
@@ -133,6 +193,10 @@ class Message(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
     message = models.TextField(max_length=1000)
     sent_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Message: {self.message}"
+    
 
 class WhitelistPeople(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='whitelist_people')

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+</head>
+<body>
+    <h1>Chat freely</h1>
+    <form id="form">
+        <input type="text" name="message">
+        <input type="submit">
+    </form>
+    <div class="messages"></div>
+    
+    
+    <script>
+        const ws = new WebSocket(`ws://` + window.location.hostname + ':8000/ws/chatSocket/');
+
+        ws.onopen = (event) => {
+            console.log("Connection established: ", event);
+        }
+
+        ws.onclose = (event) => {
+            console.log("Connection has been closed: ", event)
+        }
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data)
+
+            const messagesDiv = document.querySelector('.messages');
+            const paragraphElement = document.createElement('div');
+            paragraphElement.append(data.message);
+            messagesDiv.appendChild(paragraphElement)
+        }
+
+        ws.onerror = (event) => {
+            console.log("Error with connection: ", event)
+        }
+
+        const form = document.querySelector('#form')
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
+            
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({message: form.message.value}));
+                form.message.value = ""
+            } else {
+                console.log("Web socket connection is not open")
+            }
+        })
+    </script>
+</body>
+</html>

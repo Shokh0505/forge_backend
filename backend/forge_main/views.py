@@ -10,10 +10,11 @@ from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from django.core.paginator import Paginator
-from .serializers import SignupSerializer, UserSerializer, ChallengeSerializer, ChallengeListSerializer
+from .serializers import SignupSerializer, UserSerializer, ChallengeSerializer, ChallengeListSerializer, MessageSerializer, UserSerializerID
 from django.http import JsonResponse
-from .models import User, Challenge, ChallengeLike, ChallengeRecord
-from datetime import date
+from .models import User, Challenge, ChallengeLike, ChallengeRecord, Chat, Message, Settings, WhitelistPeople
+from datetime import date, datetime, timedelta
+from collections import defaultdict
 
 def homeIndex(request):
     return render(request, 'home.html')
@@ -215,8 +216,12 @@ def groupChallengeStats(request):
     challenge = Challenge.objects.get(id=challengeID)
     if challenge is None:
         return Response({"message": "error", "description": "provided id is not valid"}, status=400)
-    
+
     data["isJoined"] = challenge.isParticipant(user)
+
+    serializerOwner = UserSerializerID(challenge.owner)
+    data["owner"] = serializerOwner.data
+    data["challengeTitle"] = challenge.challenge_title
     
     # the user has done the challenge today?
     current_time = date.today()
@@ -235,8 +240,208 @@ def groupChallengeStats(request):
 
     return Response({"message": "success", "data": data}, status=200)
 
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def getChallengeStreak(request):
+    challengeID = request.data.get('challengeID')
+    date_data = request.data.get("date")
+
+    challenge = Challenge.objects.get(id=challengeID)
+    if challenge is None:
+        return Response({"message": "error", "description": "not valid id was provided"}, status=status.HTTP_400_BAD_REQUEST)
+    if date_data is None:
+        return Response({"message": "error", "description": "date is not provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+    data_format = "%Y-%m-%d"
+    data_obj = datetime.strptime(date_data, data_format).date()
+
+    start_date = date(data_obj.year, data_obj.month, 1)
+    end_date = date(data_obj.year, data_obj.month + 1, 1) - timedelta(days=1)
+
+    records = ChallengeRecord.objects.filter(
+        challenge=challenge,
+        date__range=[start_date, end_date]
+    ).values('user', 'date')
+
+    date_to_users = defaultdict(set)
+
+    for record in records:
+        date_to_users[record['date']].add(record['user'])
+
+    data = []
+    total = challenge.participants.count()
+
+    for day in date_to_users:
+        done = len(date_to_users[day])
+        percentage = int((done / total) * 100) if total else 0
+        data.append({'date': day, 'percentage': percentage})
+
+    return Response({"message": "success", "data": data}, status=200)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def getParticipatedChallenges(request):
+    user = request.user
+    challengesToSend = []
+
+    challenges = user.challenges.all()
+
+    for challenge in challenges:
+        data = dict()
+        data['id'] = challenge.id
+        data['days'] = (date.today() - challenge.start_time).days
+        data['percentage'] = challenge.overallPercentageToday()
+        data['streak'] = challenge.streakUser(user)
+        owner = UserSerializer(challenge.owner).data
+        data['owner'] = owner
+        data['challengeTitle'] = challenge.challenge_title
+        challengesToSend.append(data)
+
+    return Response({"message": "success", "data": challengesToSend}, status=200)
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def getMessages(request):
+    user = request.user
+    chat_partner = request.data.get("partnerID")
+    chat_partner = User.objects.get(id=chat_partner)
+    chat = None
 
 
+    if chat_partner is None:
+        return Response({"message": "Not valid id was given"}, status=400)
 
+    if int(user.id) > int(chat_partner.id):
+        chat = Chat.objects.filter(user1=chat_partner, user2=user).first()
+    else:
+        chat = Chat.objects.filter(user1=user, user2=chat_partner).first()
+
+
+    if chat is None:
+        return Response({
+                            "message": "No chat has been created", 
+                            "data": None,
+                            "next": None
+                        })
     
+    messages = Message.objects.filter(chat=chat).order_by('-sent_at')
+    paginator = Paginator(messages, 10)
+    page_number = request.GET.get('page')
 
+
+    if page_number is None or not page_number.isnumeric():
+        return Response({"message": "Query was given incorrectly"}, status=400)
+
+    if not page_number.isnumeric() or int(page_number) > paginator.num_pages:
+        return Response({"message": "sucess", "data": None, "next": False})
+
+    page = paginator.page(page_number)
+    serializer = MessageSerializer(page, many=True)
+
+    return Response({"message": "success", "data": serializer.data, 'next': page.has_next()})
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_inbox_people(request):
+    user = request.user
+    inbox_people = user.get_all_chats()
+
+    final_data = []
+
+    for person in inbox_people:
+        serialized_data = {}
+        
+        user_serialized = UserSerializerID(person['user'])
+        serialized_data['user'] = user_serialized.data
+
+        message_serialized = MessageSerializer(person['last_message'])
+        serialized_data['last_message'] = message_serialized.data
+        final_data.append(serialized_data)
+
+    return Response({"message": "success", "data": final_data}, status=200)
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def update_profile_photo(request):
+    user = request.user
+    picture = request.data.get('picture')
+
+    if not picture:
+        return Response({"message": "Picuture is not valid"}, status=400)
+    
+    user.profile_photo = picture    
+    user.save()
+
+    return Response({"message": "Success"}, status=200)
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def changeBIO(request):
+    user = request.user
+    bio = request.data.get('bio')
+
+    if not bio or len(bio) > 500:
+        return Response({"message": "error", "description": "invalid bio"}, status=400)
+
+    user.bio = bio
+    user.save()
+
+    return Response({"message": "success"}, status=200)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def toggle_allow_messaging(request):
+    user = request.user
+    
+    if Settings.objects.filter(user=user).exists():
+        user.user_settings.allow_messaging = not user.user_settings.allow_messaging
+        user.user_settings.save()
+    else:
+        settings = Settings.objects.create(user=user, allow_messaging=False)
+        settings.save()
+    
+    return Response({"message": "success"}, status=200)
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def add_white_list(request):
+    user = request.user
+    allowed_person_username = request.data.get('username')
+
+    allowed_person = User.objects.get(username=allowed_person_username)
+    if user is None:
+        return Response({"message": "success", "description": "This username doesn't exist"}, status=400)
+    
+    WhitelistPeople.objects.create(user=user, allowed_person=allowed_person)
+    
+    settings = Settings.objects.get(user=user)
+    if settings is None:
+        settings = Settings.objects.create(user=user, allow_messaging=False)
+
+    settings.has_whitelist = True
+    settings.save()
+
+    return Response({"message": "success"}, status=200)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_whiteListed_people(request):
+    user = request.user
+
+    whitelist_people = user.whitelist_people.all()
+
+    serialized_data = []
+
+    for person in whitelist_people:
+        print(person)
+
+    return Response({"message": "success"}, status=200)
