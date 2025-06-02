@@ -61,7 +61,8 @@ def login(request):
 def whoAmI(request):
     user = request.user
     serializer = UserSerializer(user)
-    return Response({"message": "success", "user": serializer.data}, status=status.HTTP_200_OK)
+    bio = user.bio
+    return Response({"message": "success", "user": serializer.data, "bio": bio}, status=status.HTTP_200_OK)
 
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication])
@@ -237,7 +238,6 @@ def groupChallengeStats(request):
     serialized_users = UserSerializer(users, many=True)
 
     data["topLeaders"] = serialized_users.data
-
     return Response({"message": "success", "data": data}, status=200)
 
 @api_view(['POST'])
@@ -454,3 +454,36 @@ def is_messaging_allowed(request):
     user = request.user
     isAllowed = user.user_settings.allow_messaging
     return Response({"message": "success", "isAllowed": isAllowed}, status=200)
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def remove_whitelist(request):
+    user = request.user
+
+    person_remove_id = request.data.get('id')
+    person_remove = User.objects.get(id=person_remove_id)
+
+    if not person_remove:
+        return Response({"message": "error", "description": "This person doesn't exist"}, status=400)
+
+    WhitelistPeople.objects.filter(user=user, allowed_person=person_remove).delete()
+
+    return Response({"message": "success"}, status=200)
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def allowedMessaging(request):
+    user = request.user
+    id = request.data.get('id')
+
+    person = User.objects.get(id=id)
+
+    if not person:
+        return Response({"message": "error", "description": "This person doesn't exist"}, status=400)
+
+    isAllowed = user.user_settings.allow_messaging
+
+    return Response({"message": "success", "id": user.id, "isAllowed": isAllowed}, status=200)

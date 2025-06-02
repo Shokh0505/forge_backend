@@ -32,6 +32,8 @@ urlpatterns = [
     path('toggle_allow_messaging/', toggle_allow_messaging, name='toggle_allow_messaging'),
     path('add_white_list/', add_white_list, name='add_white_list'),
     path('get_whiteListed_people/', get_whiteListed_people, name='get_whiteListed_people'),
-    path('is_messaging_allowed/', is_messaging_allowed, name='is_messaging_allowed'),
+    path('is_messaging_allowed/', is_messaging_allowed, name='is_messaging_allowed'),# for the user himself
+    path('remove_white_list/', remove_whitelist, name='remove_white_list'),
+    path('allowed_messaging/', allowedMessaging, name='allowedMessaging'), # for other users 
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
