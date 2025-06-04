@@ -26,6 +26,7 @@ urlpatterns = [
     # Inbox
     path('getMessages/', getMessages, name='getMessages'),
     path('getInboxPeople/', get_inbox_people, name='get_inbox_people'),
+    path('get_username/', get_username, name='get_username'),
     # Settings
     path('update_profile_picture/', update_profile_photo),
     path('changeBIO/', changeBIO, name='changeBIO'),

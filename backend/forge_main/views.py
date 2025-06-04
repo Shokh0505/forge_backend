@@ -29,6 +29,7 @@ def signup(request):
     serializer = SignupSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save()
+        Settings.objects.create(user=user)
         return Response({"message": "user created successfully"}, status=status.HTTP_201_CREATED)
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -407,7 +408,7 @@ def toggle_allow_messaging(request):
         settings = Settings.objects.create(user=user, allow_messaging=False)
         settings.save()
     
-    return Response({"message": "success"}, status=200)
+    return Response({"message": "success", "isAllowed": user.user_settings.allow_messaging}, status=200)
 
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication])
@@ -484,6 +485,24 @@ def allowedMessaging(request):
     if not person:
         return Response({"message": "error", "description": "This person doesn't exist"}, status=400)
 
-    isAllowed = user.user_settings.allow_messaging
+    isAllowed = person.user_settings.allow_messaging
+    if not isAllowed:
+        isAllowed = WhitelistPeople.objects.filter(user=person, allowed_person=user).exists()
 
     return Response({"message": "success", "id": user.id, "isAllowed": isAllowed}, status=200)
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_username(request):
+    id = request.data.get('id')
+
+    if not id:
+        return Response({"message": "error", "description": "id is not provided"}, status=400)
+    
+    user = User.objects.get(id=id)
+
+    if not user:
+        return Response({"message": "no user with this id"}, status=400)
+    
+    return Response({"message": "success", "username": user.username, "profile_photo": user.profile_photo}, status=200)
